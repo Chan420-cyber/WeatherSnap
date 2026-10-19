@@ -27,7 +27,7 @@ paints the entire interface with a theme that matches the weather outside.
 
 ## 🖼️ Preview
 
-> _Drop a screenshot or GIF here once you've captured one._
+![WheatherSnap preview](weahterSnap.png)
 > The card fades in, the theme morphs on each search, and the clock ticks live.
 
 ---
