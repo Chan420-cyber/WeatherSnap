@@ -3,59 +3,254 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet"  href="weather.css">
+    <link rel="stylesheet" href="weather.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <title>Weather</title>
- 
 </head>
-<body>
-    <div class="weather">
-        <h2>Weather App</h2>
-        <input type="text" id="city" placeholder="Enter City Name">
-        <button onclick="getWeather()">Get Weather</button>
-        <div id="result"></div>
+<body data-theme="default">
+    <div class="app">
+        <div class="weather">
+            <header class="weather__header">
+                <h1>Weather</h1>
+                <p class="subtitle" id="subtitle">Locating you…</p>
+            </header>
+
+            <form class="search" id="searchForm">
+                <input
+                    type="text"
+                    id="city"
+                    placeholder="Enter city name"
+                    autocomplete="off"
+                    spellcheck="false"
+                >
+                <button type="submit" aria-label="Get Weather">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="7"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                </button>
+            </form>
+
+            <button class="locate-btn" id="locateBtn" type="button">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7z"></path>
+                    <circle cx="12" cy="9" r="2.5"></circle>
+                </svg>
+                Use my location
+            </button>
+
+            <div id="result" class="result" aria-live="polite"></div>
+        </div>
     </div>
 
     <script>
-         
-         // async function getWeather() {
-            
-         // let city  =  document.getElementById('city').value
+        const API_KEY = '8e30287640527d999e7930b6472a18c2';
+        const BASE_URL = 'https://api.openweathermap.org/data/2.5/weather';
 
-         // if(!city){
-         //    alert('Please Enter the city name')
-         //    return;
-         // }
+        const form = document.getElementById('searchForm');
+        const input = document.getElementById('city');
+        const result = document.getElementById('result');
+        const locateBtn = document.getElementById('locateBtn');
+        const subtitle = document.getElementById('subtitle');
+        const body = document.body;
 
-         // const apiKey = '78e30287640527d999e7930b6472a18c2'; 
-         // let url = `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=8e30287640527d999e7930b6472a18c2&units=metric`
+        // ---------- Form submit ----------
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const city = input.value.trim();
+            if (!city) {
+                showError('Please enter a city name.');
+                return;
+            }
+            fetchByCity(city);
+        });
 
-         // try{
-  
-         // let response  =  await  fetch(url)
-         // let data = await response.json()
+        // ---------- Locate button ----------
+        locateBtn.addEventListener('click', () => {
+            detectLocation(true);
+        });
 
-         // console.log(data)
+        // ---------- Auto-locate on load ----------
+        window.addEventListener('load', () => {
+            detectLocation(false);
+        });
 
-         // if(data.cod !==200){
-         //    throw new Error(data.message)
-         // }
+        // ---------- Geolocation flow ----------
+        function detectLocation(userInitiated) {
+            if (!('geolocation' in navigator)) {
+                if (userInitiated) showError('Geolocation not supported by your browser.');
+                subtitle.textContent = 'Search for a city to begin';
+                return;
+            }
 
-         // document.getElementById('result').innerHTML = 
-         // `<h4>${data.name}</h4>
-         //  <h3>${data.main.temp}</h3>
-         //  <p>${data.weather[0].description}</p>
-         //  <h4>${data.visibility}</h4>
-         //  <h4>${data.wind.speed}</h4>
-         // `
+            subtitle.textContent = 'Locating you…';
+            if (userInitiated) showLoading();
 
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    const { latitude, longitude } = pos.coords;
+                    fetchByCoords(latitude, longitude);
+                },
+                (err) => {
+                    // Fallback: don't nag the user on auto-attempt
+                    if (userInitiated) {
+                        showError('Could not get your location. Please search manually.');
+                    } else {
+                        subtitle.textContent = 'Search for a city to begin';
+                    }
+                    console.warn('Geolocation error:', err.message);
+                },
+                { timeout: 8000, maximumAge: 5 * 60 * 1000 }
+            );
+        }
 
-         // }catch(error){
-         //    document.getElementById('result').innerHTML = `<p>Error: ${error.message}</p>`
-         // }
-               
-         // }
+        // ---------- Fetch by city ----------
+        async function fetchByCity(city) {
+            showLoading();
+            subtitle.textContent = 'Fetching weather…';
+            try {
+                const res = await fetch(
+                    `${BASE_URL}?q=${encodeURIComponent(city)}&appid=${API_KEY}&units=metric`
+                );
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.message || 'Something went wrong');
+                renderWeather(data);
+            } catch (err) {
+                showError(err.message);
+                subtitle.textContent = 'Search for a city to begin';
+            }
+        }
 
-         
-</script>   
+        // ---------- Fetch by coords ----------
+        async function fetchByCoords(lat, lon) {
+            showLoading();
+            subtitle.textContent = 'Fetching weather…';
+            try {
+                const res = await fetch(
+                    `${BASE_URL}?lat=${lat}&lon=${lon}&appid=${API_KEY}&units=metric`
+                );
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.message || 'Something went wrong');
+                renderWeather(data);
+            } catch (err) {
+                showError(err.message);
+                subtitle.textContent = 'Search for a city to begin';
+            }
+        }
+
+        // ---------- Render ----------
+        let clockInterval = null;
+
+         function renderWeather(data) {
+            const temp = Math.round(data.main.temp);
+            const feels = Math.round(data.main.feels_like);
+            const desc = data.weather[0].description;
+            const icon = data.weather[0].icon;
+            const windKmh = (data.wind.speed * 3.6).toFixed(1);
+            const visibilityKm = (data.visibility / 1000).toFixed(1);
+
+            // Apply dynamic theme
+            const theme = getTheme(data.weather[0].id, icon);
+            body.dataset.theme = theme;
+            subtitle.textContent = 'Weather updated';
+
+            result.innerHTML = `
+               <div class="card">
+                     <div class="card__top">
+                        <div>
+                           <h2 class="city">${data.name}</h2>
+                           <p class="country">${data.sys.country}</p>
+                        </div>
+                        <img
+                           class="icon"
+                           src="https://openweathermap.org/img/wn/${icon}@4x.png"
+                           alt="${desc}"
+                        >
+                     </div>
+
+                     <div class="temp">
+                        <span class="temp__value">${temp}</span>
+                        <span class="temp__unit">°C</span>
+                     </div>
+                     <p class="desc">${desc}</p>
+                     <p class="feels">Feels like ${feels}°C</p>
+
+                     <div class="localtime">
+                        <span class="localtime__label">Local time</span>
+                        <span class="localtime__value" id="localTime">--:--:--</span>
+                     </div>
+
+                     <div class="stats">
+                        <div class="stat">
+                           <span class="stat__label">Wind</span>
+                           <span class="stat__value">${windKmh} km/h</span>
+                        </div>
+                        <div class="stat">
+                           <span class="stat__label">Humidity</span>
+                           <span class="stat__value">${data.main.humidity}%</span>
+                        </div>
+                        <div class="stat">
+                           <span class="stat__label">Visibility</span>
+                           <span class="stat__value">${visibilityKm} km</span>
+                        </div>
+                     </div>
+               </div>
+            `;
+
+            startClock(data.timezone);
+         }
+
+         // ---------- Local time in the searched city ----------
+         // `timezoneOffsetSec` = data.timezone (seconds from UTC, from OpenWeather)
+         // `dataDt` = data.dt (Unix UTC timestamp when weather was measured)
+         function startClock(timezoneOffsetSec) {
+            if (clockInterval) clearInterval(clockInterval);
+
+            const el = document.getElementById('localTime');
+            if (!el) return;
+
+            console.log('timezone offset from API (sec):', timezoneOffsetSec);
+
+            function tick() {
+               // Date.now() is already true UTC ms — no browser-offset correction needed
+               const cityDate = new Date(Date.now() + timezoneOffsetSec * 1000);
+
+               const hh = String(cityDate.getUTCHours()).padStart(2, '0');
+               const mm = String(cityDate.getUTCMinutes()).padStart(2, '0');
+               const ss = String(cityDate.getUTCSeconds()).padStart(2, '0');
+
+               el.textContent = `${hh}:${mm}:${ss}`;
+            }
+
+            tick();
+            clockInterval = setInterval(tick, 1000);
+         }
+
+        // ---------- Theme resolver ----------
+        // OpenWeather condition IDs: https://openweathermap.org/weather-conditions
+        function getTheme(conditionId, iconCode) {
+            const isNight = iconCode.endsWith('n');
+
+            if (conditionId >= 200 && conditionId < 300) return 'thunder';
+            if (conditionId >= 300 && conditionId < 600) return 'rain';
+            if (conditionId >= 600 && conditionId < 700) return 'snow';
+            if (conditionId >= 700 && conditionId < 800) return 'mist';
+            if (conditionId === 800) return isNight ? 'clear-night' : 'clear';
+            if (conditionId > 800) return isNight ? 'clouds-night' : 'clouds';
+
+            return 'default';
+        }
+
+        // ---------- UI helpers ----------
+        function showLoading() {
+            result.innerHTML = `<div class="loading"><span></span></div>`;
+        }
+
+        function showError(message) {
+            result.innerHTML = `<div class="error">${message}</div>`;
+        }
+    </script>
 </body>
 </html>
